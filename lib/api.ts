@@ -74,7 +74,7 @@ export async function apiRequest<T = any>(
   }
 
   // Build headers
-  const requestHeaders: HeadersInit = {
+  const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'X-CSRF-Token': getCSRFToken(),
