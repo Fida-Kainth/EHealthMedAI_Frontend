@@ -19,18 +19,28 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     try {
       setError('')
+      console.log('Initiating Google login...')
+      
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+      console.log('API URL:', apiUrl)
+      
       const response = await fetch(`${apiUrl}/auth/google`)
+      console.log('Response status:', response.status)
+      
       const data = await response.json()
+      console.log('Response data:', data)
       
       if (data.error) {
+        console.error('Google OAuth error:', data)
         setError(data.message || data.error || 'Google OAuth is not configured. Please check server configuration.')
         return
       }
       
       if (data.url) {
+        console.log('Redirecting to Google OAuth URL:', data.url)
         window.location.href = data.url
       } else {
+        console.error('No URL in response:', data)
         setError('Failed to get Google OAuth URL')
       }
     } catch (err) {

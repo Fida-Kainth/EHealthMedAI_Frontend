@@ -14,25 +14,36 @@ export default function AuthCallbackPage() {
       const error = searchParams.get('error')
       const details = searchParams.get('details')
 
-      console.log('Auth callback:', { token: token ? 'present' : 'missing', error, details })
+      console.log('Auth callback received:', { 
+        token: token ? 'present' : 'missing', 
+        error, 
+        details,
+        fullUrl: window.location.href,
+        searchParams: Object.fromEntries(searchParams.entries())
+      })
 
       if (error) {
+        console.error('OAuth error received:', error, details)
         const errorMsg = details ? `${error}: ${details}` : error
         router.push(`/login?error=${encodeURIComponent(errorMsg)}`)
         return
       }
 
       if (token) {
+        console.log('Token received, storing...')
         // Store token securely
         tokenManager.setToken(token, 7 * 24 * 60 * 60) // 7 days
         
         // Fetch user data to create session
         try {
+          console.log('Fetching user data...')
           const { get } = await import('@/lib/api')
           const response = await get('/users/me')
+          console.log('User data response:', response)
           
           if (response.data?.user) {
             sessionManager.createSession(response.data.user)
+            console.log('Session created for user:', response.data.user.email)
           }
         } catch (error) {
           console.error('Error fetching user:', error)

@@ -316,12 +316,19 @@ export default function ReportsPage() {
                         onClick={async () => {
                           try {
                             const token = localStorage.getItem('token')
-                            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+                            if (!token) {
+                              alert('Please log in to download reports')
+                              router.push('/login')
+                              return
+                            }
+
+                            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
                             const response = await fetch(
-                              `${apiUrl}/api/reports/${report.id}/download`,
+                              `${apiUrl}/reports/${report.id}/download`,
                               {
+                                method: 'GET',
                                 headers: {
-                                  Authorization: `Bearer ${token}`
+                                  'Authorization': `Bearer ${token}`
                                 }
                               }
                             )
@@ -331,18 +338,56 @@ export default function ReportsPage() {
                               const url = window.URL.createObjectURL(blob)
                               const a = document.createElement('a')
                               a.href = url
+                              
+                              // Get filename from Content-Disposition header
                               const contentDisposition = response.headers.get('Content-Disposition')
-                              const filename = contentDisposition
-                                ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
-                                : `report-${report.id}.${report.format || 'json'}`
-                              a.download = filename
-                              document.body.appendChild(a)
-                              a.click()
+                              let filename = `report-${report.id}.${report.format || 'json'}`
+                              
+                              if (contentDisposition) {
+                                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
+                                if (filenameMatch) {
+                                  filename = filenameMatch[1]
+                                }
+                              }
+                              
+                              // Check if this is a PDF format but HTML content (for browser compatibility)
+                              const contentType = response.headers.get('content-type')
+                              if (report.format === 'pdf' && contentType?.includes('text/html')) {
+                                // For PDF format reports that are delivered as HTML, open in new tab for better viewing
+                                const newWindow = window.open(url, '_blank')
+                                if (newWindow) {
+                                  newWindow.document.title = filename
+                                } else {
+                                  // Fallback to download if popup blocked
+                                  a.download = filename
+                                  document.body.appendChild(a)
+                                  a.click()
+                                  document.body.removeChild(a)
+                                }
+                              } else {
+                                // Normal download for other formats
+                                a.download = filename
+                                document.body.appendChild(a)
+                                a.click()
+                                document.body.removeChild(a)
+                              }
+                              
                               window.URL.revokeObjectURL(url)
-                              document.body.removeChild(a)
+                            } else if (response.status === 401 || response.status === 403) {
+                              // Token expired or invalid
+                              localStorage.removeItem('token')
+                              alert('Your session has expired. Please log in again.')
+                              router.push('/login')
                             } else {
-                              const errorData = await response.json().catch(() => ({ message: 'Failed to download report' }))
-                              alert(errorData.message || 'Failed to download report')
+                              const errorText = await response.text()
+                              console.error('Download failed:', response.status, errorText)
+                              
+                              try {
+                                const errorData = JSON.parse(errorText)
+                                alert(errorData.message || 'Failed to download report')
+                              } catch {
+                                alert(`Failed to download report: ${response.status} ${response.statusText}`)
+                              }
                             }
                           } catch (error: any) {
                             console.error('Error downloading report:', error)

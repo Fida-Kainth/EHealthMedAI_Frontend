@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { post, get } from '@/lib/api'
+import { post, get, del } from '@/lib/api'
 
 interface Channel {
   id: number
@@ -26,6 +26,7 @@ export default function ChannelsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createLoading, setCreateLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
   const [formData, setFormData] = useState({
     agent_id: '',
     channel_type: 'phone'
@@ -104,6 +105,28 @@ export default function ChannelsPage() {
     }
   }
 
+  const handleDelete = async (channelId: number, channelType: string) => {
+    if (!confirm(`Are you sure you want to delete this ${channelType.replace('_', ' ')} channel? This action cannot be undone.`)) {
+      return
+    }
+
+    setDeleteLoading(channelId)
+
+    try {
+      const response = await del(`/presentation/channels/${channelId}`)
+
+      if (response.error) {
+        alert(response.error)
+      } else {
+        fetchChannels() // Refresh the list
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error deleting channel')
+    } finally {
+      setDeleteLoading(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-center justify-center">
@@ -142,9 +165,29 @@ export default function ChannelsPage() {
                     <h3 className="text-white font-bold text-lg capitalize">{channel.channel_type.replace('_', ' ')}</h3>
                     {agent && <p className="text-slate-300 text-sm">{agent.name}</p>}
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs ${channel.is_active ? 'bg-green-500' : 'bg-gray-500'} text-white`}>
-                    {channel.is_active ? 'Active' : 'Inactive'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded text-xs ${channel.is_active ? 'bg-green-500' : 'bg-gray-500'} text-white`}>
+                      {channel.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(channel.id, channel.channel_type)}
+                      disabled={deleteLoading === channel.id}
+                      className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete channel"
+                    >
+                      {deleteLoading === channel.id ? (
+                        <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-slate-400 text-sm">
+                  <p>Channel ID: {channel.id}</p>
+                  {agent && <p>Agent Type: {agent.type}</p>}
                 </div>
               </div>
             )
