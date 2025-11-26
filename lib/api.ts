@@ -74,7 +74,7 @@ export async function apiRequest<T = any>(
   }
 
   // Build headers
-  const requestHeaders: Record<string, string> = {
+  const baseHeaders = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'X-CSRF-Token': getCSRFToken(),
@@ -85,9 +85,11 @@ export async function apiRequest<T = any>(
   if (requireAuth && !skipAuth) {
     const authHeader = getAuthHeader()
     if (authHeader) {
-      requestHeaders['Authorization'] = authHeader
+      baseHeaders['Authorization'] = authHeader
     }
   }
+
+  const requestHeaders = new Headers(baseHeaders)
 
   // Sanitize body
   let requestBody: string | undefined
