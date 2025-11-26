@@ -55,8 +55,8 @@ export default function GuidancePage() {
 
   const fetchStakeholderTypes = async () => {
     try {
-      const data = await get('/stakeholders/types')
-      const types = data.stakeholder_types || []
+      const response = await get('/stakeholders/types')
+      const types = response.data?.stakeholder_types || []
       setStakeholderTypes(types)
       // If no stakeholder is selected and we have types, select the first one
       if (!selectedStakeholder && types.length > 0) {
@@ -70,11 +70,11 @@ export default function GuidancePage() {
 
   const fetchUserContent = async () => {
     try {
-      const data = await get('/stakeholders/me/content')
-      setUserContent(data)
+      const response = await get('/stakeholders/me/content')
+      setUserContent(response.data || {})
       // If user has assigned stakeholder types, use the first one
-      if (data.stakeholder_types && data.stakeholder_types.length > 0 && !selectedStakeholder) {
-        setSelectedStakeholder(data.stakeholder_types[0])
+      if (response.data?.stakeholder_types && response.data.stakeholder_types.length > 0 && !selectedStakeholder) {
+        setSelectedStakeholder(response.data.stakeholder_types[0])
       }
     } catch (error: any) {
       console.error('Error fetching user content:', error)
@@ -92,8 +92,8 @@ export default function GuidancePage() {
 
     setGuidanceLoading(true)
     try {
-      const data = await get(`/stakeholders/${stakeholderCode}/guidance`)
-      setGuidance(data.guidance || [])
+      const response = await get(`/stakeholders/${stakeholderCode}/guidance`)
+      setGuidance(response.data?.guidance || [])
       setError(null)
     } catch (error: any) {
       console.error('Error fetching guidance:', error)
