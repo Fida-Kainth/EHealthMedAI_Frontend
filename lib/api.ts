@@ -74,11 +74,15 @@ export async function apiRequest<T = any>(
   }
 
   // Build headers
-  const baseHeaders = {
+  const baseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'X-CSRF-Token': getCSRFToken(),
-    ...headers
+  }
+
+  // Add custom headers
+  if (headers) {
+    Object.assign(baseHeaders, headers)
   }
 
   // Add authorization header

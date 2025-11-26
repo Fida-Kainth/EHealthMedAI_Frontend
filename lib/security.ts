@@ -25,7 +25,7 @@ export function sanitizeObject<T extends Record<string, any>>(obj: T): T {
   if (Array.isArray(obj)) {
     return obj.map(item => 
       typeof item === 'string' ? sanitizeInput(item) : sanitizeObject(item)
-    ) as T
+    ) as unknown as T
   }
 
   const sanitized = { ...obj }
