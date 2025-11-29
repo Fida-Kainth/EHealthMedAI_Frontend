@@ -100,10 +100,11 @@ export function useAuth(): UseAuthReturn {
     email: string,
     password: string
   ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      console.log('Logging in with email:', email)
+    console.log('Logging in with email:', email)
 
+    try {
       const response = await post('/auth/login', { email, password }, { skipAuth: true })
+      console.log('Login API response:', response)
 
       if (response.error) {
         console.error('Login error:', response.error)
