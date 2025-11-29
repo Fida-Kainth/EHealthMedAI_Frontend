@@ -37,8 +37,11 @@ export function useAuth(): UseAuthReturn {
   }, [])
 
   const checkAuth = useCallback(async () => {
+    console.log('Checking authentication...')
+
     try {
       if (!isAuthenticated()) {
+        console.log('User is not authenticated')
         setUser(null)
         setIsAuth(false)
         setLoading(false)
@@ -48,6 +51,7 @@ export function useAuth(): UseAuthReturn {
       // Get user from session or fetch from API
       const session = sessionManager.getUser()
       if (session) {
+        console.log('Session found:', session)
         setUser({
           id: session.userId,
           email: session.email,
@@ -60,8 +64,11 @@ export function useAuth(): UseAuthReturn {
         return
       }
 
+      console.log('Session not found, fetching from API...')
       // Fetch user from API
       const response = await get('/users/me')
+      console.log('API response:', response)
+
       if (response.data?.user) {
         const userData = response.data.user
         setUser({
@@ -74,6 +81,7 @@ export function useAuth(): UseAuthReturn {
         sessionManager.createSession(userData)
         setIsAuth(true)
       } else {
+        console.log('No user data found, clearing auth...')
         clearAuth()
         setIsAuth(false)
         setUser(null)
@@ -93,13 +101,17 @@ export function useAuth(): UseAuthReturn {
     password: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
+      console.log('Logging in with email:', email)
+
       const response = await post('/auth/login', { email, password }, { skipAuth: true })
 
       if (response.error) {
+        console.error('Login error:', response.error)
         return { success: false, error: response.error }
       }
 
       if (response.data?.token) {
+        console.log('Login successful, setting token...')
         tokenManager.setToken(response.data.token, 7 * 24 * 60 * 60) // 7 days
         if (response.data.user) {
           sessionManager.createSession(response.data.user)
@@ -115,13 +127,16 @@ export function useAuth(): UseAuthReturn {
         return { success: true }
       }
 
+      console.error('Invalid response from server')
       return { success: false, error: 'Invalid response from server' }
     } catch (error: any) {
+      console.error('Login failed:', error)
       return { success: false, error: error.message || 'Login failed' }
     }
   }, [])
 
   const logout = useCallback(() => {
+    console.log('Logging out...')
     clearAuth()
     setUser(null)
     setIsAuth(false)
@@ -129,6 +144,7 @@ export function useAuth(): UseAuthReturn {
   }, [router])
 
   const refreshUser = useCallback(async () => {
+    console.log('Refreshing user session...')
     await checkAuth()
   }, [checkAuth])
 
@@ -141,4 +157,3 @@ export function useAuth(): UseAuthReturn {
     refreshUser
   }
 }
-
