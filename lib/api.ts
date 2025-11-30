@@ -23,6 +23,7 @@ interface ApiResponse<T = any> {
   data?: T
   error?: string
   message?: string
+  ok?: boolean // Add for backwards compatibility
 }
 
 /**
@@ -69,7 +70,7 @@ export async function apiRequest<T = any>(
     const token = tokenManager.getToken()
     if (!token || tokenManager.isTokenExpired()) {
       // Return error instead of redirecting - let pages handle it
-      return { error: 'Authentication required' }
+      return { ok: false, error: 'Authentication required' }
     }
   }
 
@@ -155,11 +156,12 @@ export async function apiRequest<T = any>(
             window.location.href = '/login?error=session_invalid'
           }
         }
-        return { error: 'Session expired. Please login again.' }
+        return { ok: false, error: 'Session expired. Please login again.' }
       }
       
       // For non-auth 401/403 errors, just return the error without redirecting
       return {
+        ok: false,
         error: errorMessage || `Request failed: ${response.statusText}`,
         data: data
       }
@@ -176,15 +178,17 @@ export async function apiRequest<T = any>(
 
     if (!response.ok) {
       return {
+        ok: false,
         error: data?.message || data?.error || `Request failed: ${response.statusText}`,
         data: data
       }
     }
 
-    return { data }
+    return { ok: true, data }
   } catch (error: any) {
     console.error('API request error:', error)
     return {
+      ok: false,
       error: error.message || 'Network error. Please check your connection.'
     }
   }
@@ -339,11 +343,12 @@ export async function uploadFile<T = any>(
             window.location.href = '/login?error=session_invalid'
           }
         }
-        return { error: 'Session expired. Please login again.' }
+        return { ok: false, error: 'Session expired. Please login again.' }
       }
       
       // For non-auth errors, return error without redirecting
       return {
+        ok: false,
         error: errorMessage || `Upload failed: ${response.statusText}`,
         data: uploadData
       }
@@ -353,15 +358,17 @@ export async function uploadFile<T = any>(
 
     if (!response.ok) {
       return {
+        ok: false,
         error: data.message || data.error || `Upload failed: ${response.statusText}`,
         data: data
       }
     }
 
-    return { data }
+    return { ok: true, data }
   } catch (error: any) {
     console.error('File upload error:', error)
     return {
+      ok: false,
       error: error.message || 'Upload failed. Please try again.'
     }
   }
