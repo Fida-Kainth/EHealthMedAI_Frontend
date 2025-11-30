@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { isAuthenticated } from '@/lib/auth'
+import {  isAuthenticated  } from '@/lib/auth'
+import { get, post } from '@/lib/api'
 
 interface Reference {
   id: number
@@ -42,17 +43,16 @@ export default function ReferencesPage() {
 
   const fetchReferences = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/references`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await get('/references')
 
-      if (response.ok) {
-        const data = await response.json()
-        setReferences(data.references)
-        setFilteredReferences(data.references)
+      if (response.error) {
+        console.error('Error fetching references:', response.error)
+        return
+      }
+
+      if (response.data?.references) {
+        setReferences(response.data.references)
+        setFilteredReferences(response.data.references)
       }
     } catch (error) {
       console.error('Error fetching references:', error)

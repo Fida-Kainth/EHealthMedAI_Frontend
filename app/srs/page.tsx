@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { isAuthenticated } from '@/lib/auth'
+import {  isAuthenticated  } from '@/lib/auth'
+import { get, post } from '@/lib/api'
 
 interface SRSDocument {
   id: number
@@ -59,10 +60,7 @@ export default function SRSPage() {
 
   const fetchDocuments = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/srs/documents`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await get('/srs/documents')
       if (response.ok) {
         const data = await response.json()
         setDocuments(data.documents)
@@ -86,16 +84,12 @@ export default function SRSPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/srs/documents`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      })
-      if (response.ok) {
+      const response = await post('/srs/documents', formData)
+      if (response.error) {
+        console.error('Error creating document:', response.error)
+        return
+      }
+      if (response.data) {
         setShowCreateModal(false)
         setFormData({ document_id: '', title: '', section: 'overview', subsection: '', content: '', version: '1.0' })
         fetchDocuments()

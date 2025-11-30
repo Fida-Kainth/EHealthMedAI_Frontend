@@ -1,20 +1,37 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { sanitizeInput, isValidEmail } from '@/lib/security'
 import { post } from '@/lib/api'
-import { tokenManager, sessionManager } from '@/lib/auth'
+import { tokenManager, sessionManager, clearAuth } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Clear any old/invalid tokens and show error message
+  useEffect(() => {
+    clearAuth() // Clear any existing auth data
+    // Clear redirect flag when on login page
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('auth_redirect_attempted')
+    }
+    
+    const errorParam = searchParams.get('error')
+    if (errorParam === 'session_invalid') {
+      setError('Your session has expired or is invalid. Please login again.')
+    } else if (errorParam === 'session_expired') {
+      setError('Your session has expired. Please login again.')
+    }
+  }, [searchParams])
 
   const handleGoogleLogin = async () => {
     try {

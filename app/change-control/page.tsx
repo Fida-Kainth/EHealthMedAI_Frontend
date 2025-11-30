@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { isAuthenticated } from '@/lib/auth'
+import {  isAuthenticated  } from '@/lib/auth'
+import { get, post } from '@/lib/api'
 
 interface ChangeControl {
   id: number
@@ -55,10 +56,7 @@ export default function ChangeControlPage() {
 
   const fetchChanges = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/change-control`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await get('/change-control')
       if (response.ok) {
         const data = await response.json()
         setChanges(data.changes)
@@ -88,16 +86,12 @@ export default function ChangeControlPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/change-control`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      })
-      if (response.ok) {
+      const response = await post('/change-control', formData)
+      if (response.error) {
+        console.error('Error creating change request:', response.error)
+        return
+      }
+      if (response.data) {
         setShowCreateModal(false)
         setFormData({ change_id: '', change_type: 'requirement_change', title: '', description: '', reason: '', impact_assessment: '', affected_documents: [], affected_requirements: [] })
         fetchChanges()

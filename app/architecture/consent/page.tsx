@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { isAuthenticated } from '@/lib/auth'
+import {  isAuthenticated  } from '@/lib/auth'
+import { get, post } from '@/lib/api'
 
 interface Consent {
   id: number
@@ -38,10 +39,7 @@ export default function ConsentPage() {
 
   const fetchConsents = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/voice-ai/consent`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await get('/voice-ai/consent')
       if (response.ok) {
         const data = await response.json()
         setConsents(data.consents)
@@ -56,16 +54,12 @@ export default function ConsentPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/voice-ai/consent`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      })
-      if (response.ok) {
+      const response = await post('/voice-ai/consent', formData)
+      if (response.error) {
+        console.error('Error creating consent:', response.error)
+        return
+      }
+      if (response.data) {
         setShowCreateModal(false)
         setFormData({ phone_number: '', consent_type: 'automated_calls', consent_method: 'verbal', consent_status: 'granted', expires_at: '' })
         fetchConsents()

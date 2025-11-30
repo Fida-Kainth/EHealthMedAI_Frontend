@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { isAuthenticated } from '@/lib/auth'
+import {  isAuthenticated  } from '@/lib/auth'
+import { get, post } from '@/lib/api'
 
 interface Recording {
   id: number
@@ -30,10 +31,7 @@ export default function RecordingsPage() {
 
   const fetchRecordings = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/voice-ai/recordings`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await get('/voice-ai/recordings')
       if (response.ok) {
         const data = await response.json()
         setRecordings(data.recordings)

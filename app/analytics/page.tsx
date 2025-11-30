@@ -37,6 +37,7 @@ export default function AnalyticsPage() {
   const [agentPerformance, setAgentPerformance] = useState<AgentPerformance[]>([])
   const [dailyVolume, setDailyVolume] = useState<DailyVolume[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState({
     start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end_date: new Date().toISOString().split('T')[0]
@@ -53,6 +54,7 @@ export default function AnalyticsPage() {
 
   const fetchAnalytics = async () => {
     try {
+      setError(null)
       const params = new URLSearchParams({
         start_date: dateRange.start_date,
         end_date: dateRange.end_date
@@ -60,13 +62,46 @@ export default function AnalyticsPage() {
 
       const response = await get(`/analytics/dashboard?${params}`)
 
-      if (response.data) {
-        setCallStats(response.data.call_stats || null)
+      if (response.error) {
+        setError(response.error)
+        console.error('Analytics API error:', response.error)
+        // Set empty data on error
+        setCallStats({
+          total_calls: 0,
+          completed_calls: 0,
+          failed_calls: 0,
+          total_duration: 0,
+          avg_duration: 0,
+          total_cost: 0
+        })
+        setAgentPerformance([])
+        setDailyVolume([])
+      } else if (response.data) {
+        setCallStats(response.data.call_stats || {
+          total_calls: 0,
+          completed_calls: 0,
+          failed_calls: 0,
+          total_duration: 0,
+          avg_duration: 0,
+          total_cost: 0
+        })
         setAgentPerformance(response.data.agent_performance || [])
         setDailyVolume(response.data.daily_volume || [])
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching analytics:', error)
+      setError(error.message || 'Failed to load analytics data')
+      // Set empty data on error
+      setCallStats({
+        total_calls: 0,
+        completed_calls: 0,
+        failed_calls: 0,
+        total_duration: 0,
+        avg_duration: 0,
+        total_cost: 0
+      })
+      setAgentPerformance([])
+      setDailyVolume([])
     } finally {
       setLoading(false)
     }
@@ -111,6 +146,14 @@ export default function AnalyticsPage() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-xl p-4 mb-6 border border-red-500/50">
+            <div className="text-red-200 font-semibold mb-1">Error Loading Analytics</div>
+            <div className="text-red-300 text-sm">{error}</div>
+          </div>
+        )}
+
         {/* Date Range Selector */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6 border border-white/20">
           <div className="flex gap-4 items-end">
@@ -136,7 +179,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Call Statistics Cards */}
-        {callStats && (
+        {callStats ? (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
               <div className="text-slate-300 text-sm mb-2">Total Calls</div>
@@ -162,6 +205,11 @@ export default function AnalyticsPage() {
               <div className="text-slate-300 text-sm mb-2">Total Cost</div>
               <div className="text-2xl font-bold text-white">{formatCurrency(callStats.total_cost || 0)}</div>
             </div>
+          </div>
+        ) : (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20 mb-8">
+            <p className="text-white text-lg">No analytics data available</p>
+            <p className="text-slate-300 text-sm mt-2">Analytics data will appear here once calls are logged.</p>
           </div>
         )}
 

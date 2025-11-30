@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { isAuthenticated } from '@/lib/auth'
+import { get } from '@/lib/api'
 
 interface Term {
   id: number
@@ -38,17 +39,13 @@ export default function GlossaryPage() {
 
   const fetchTerms = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/terminology`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await get('/terminology')
 
-      if (response.ok) {
-        const data = await response.json()
-        setTerms(data.terminology)
-        setFilteredTerms(data.terminology)
+      if (response.data?.terminology) {
+        setTerms(response.data.terminology)
+        setFilteredTerms(response.data.terminology)
+      } else if (response.error) {
+        console.error('Error fetching terms:', response.error)
       }
     } catch (error) {
       console.error('Error fetching terms:', error)

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { clearAuth } from '@/lib/auth'
+import { clearAuth, isAuthenticated } from '@/lib/auth'
 import { post, get, put } from '@/lib/api'
 import { sanitizeInput, isValidEmail, validatePassword } from '@/lib/security'
 import Logo from '@/components/Logo'

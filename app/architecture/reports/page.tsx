@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { post, get } from '@/lib/api'
 import { sanitizeInput } from '@/lib/security'
-import { isAuthenticated } from '@/lib/auth'
+import { isAuthenticated, getAuthHeader } from '@/lib/auth'
 
 interface ReportTemplate {
   id: number
@@ -321,13 +321,27 @@ export default function ReportsPage() {
                               return
                             }
 
-                            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+                            // Get auth header
+                            const authHeader = getAuthHeader()
+                            if (!authHeader) {
+                              alert('Authentication required. Please log in again.')
+                              router.push('/login')
+                              return
+                            }
+
+                            // Build API URL
+                            const apiUrl = process.env.NEXT_PUBLIC_API_URL || (
+                              typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+                                ? 'https://ehealthmedai-backend.onrender.com/api'
+                                : 'http://localhost:5000/api'
+                            )
+
                             const response = await fetch(
                               `${apiUrl}/reports/${report.id}/download`,
                               {
                                 method: 'GET',
                                 headers: {
-                                  'Authorization': `Bearer ${token}`
+                                  'Authorization': authHeader
                                 }
                               }
                             )

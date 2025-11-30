@@ -11,6 +11,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || (
     : 'http://localhost:5000/api'
 )
 
+// Track if we've already attempted redirect to prevent loops
+const REDIRECT_KEY = 'auth_redirect_attempted'
+
 interface RequestOptions extends RequestInit {
   requireAuth?: boolean
   skipAuth?: boolean
@@ -82,6 +85,9 @@ export async function apiRequest<T = any>(
     const authHeader = getAuthHeader()
     if (authHeader) {
       baseHeaders['Authorization'] = authHeader
+      console.log('🔐 Auth header added:', authHeader.substring(0, 20) + '...')
+    } else {
+      console.warn('⚠️ No auth token found for authenticated request to:', endpoint)
     }
   }
 
@@ -110,13 +116,7 @@ export async function apiRequest<T = any>(
       credentials: 'include' // Include cookies for CSRF protection
     })
 
-    // Handle token expiration
-    if (response.status === 401) {
-      clearAuth()
-      return { error: 'Session expired. Please login again.' }
-    }
-
-    // Parse response
+    // Parse response first to check error type
     const contentType = response.headers.get('content-type')
     let data: any
 
@@ -126,9 +126,54 @@ export async function apiRequest<T = any>(
       data = await response.text()
     }
 
+    // Only redirect on actual authentication errors (401/403 with auth-related messages)
+    if (response.status === 401 || response.status === 403) {
+      const errorMessage = data?.message || data?.error || ''
+      const isAuthError = errorMessage.toLowerCase().includes('token') || 
+                         errorMessage.toLowerCase().includes('authentication') ||
+                         errorMessage.toLowerCase().includes('unauthorized') ||
+                         errorMessage.toLowerCase().includes('forbidden')
+      
+      if (isAuthError) {
+        console.warn('🔓 Invalid/expired token detected, clearing auth...')
+        clearAuth()
+        
+        // Only redirect once per session to prevent loops
+        if (typeof window !== 'undefined') {
+          const lastRedirect = sessionStorage.getItem(REDIRECT_KEY)
+          const now = Date.now()
+          
+          // Only redirect if:
+          // 1. Not already on login page
+          // 2. Haven't redirected in the last 5 seconds (prevents loops)
+          if (!window.location.pathname.includes('/login') && 
+              (!lastRedirect || (now - parseInt(lastRedirect)) > 5000)) {
+            sessionStorage.setItem(REDIRECT_KEY, now.toString())
+            window.location.href = '/login?error=session_invalid'
+          }
+        }
+        return { error: 'Session expired. Please login again.' }
+      }
+      
+      // For non-auth 401/403 errors, just return the error without redirecting
+      return {
+        error: errorMessage || `Request failed: ${response.statusText}`,
+        data: data
+      }
+    }
+
+    // If we already parsed data above, use it; otherwise parse now
+    if (!data) {
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json()
+      } else {
+        data = await response.text()
+      }
+    }
+
     if (!response.ok) {
       return {
-        error: data.message || data.error || `Request failed: ${response.statusText}`,
+        error: data?.message || data?.error || `Request failed: ${response.statusText}`,
         data: data
       }
     }
@@ -260,9 +305,45 @@ export async function uploadFile<T = any>(
       credentials: 'include'
     })
 
-    if (response.status === 401) {
-      clearAuth()
-      return { error: 'Session expired. Please login again.' }
+    // Parse response to check error type
+    let uploadData: any
+    try {
+      uploadData = await response.json()
+    } catch {
+      uploadData = { error: response.statusText }
+    }
+
+    // Only redirect on actual authentication errors
+    if (response.status === 401 || response.status === 403) {
+      const errorMessage = uploadData?.message || uploadData?.error || ''
+      const isAuthError = errorMessage.toLowerCase().includes('token') || 
+                         errorMessage.toLowerCase().includes('authentication') ||
+                         errorMessage.toLowerCase().includes('unauthorized') ||
+                         errorMessage.toLowerCase().includes('forbidden')
+      
+      if (isAuthError) {
+        console.warn('🔓 Invalid/expired token detected during upload, clearing auth...')
+        clearAuth()
+        
+        // Only redirect once per session to prevent loops
+        if (typeof window !== 'undefined') {
+          const lastRedirect = sessionStorage.getItem(REDIRECT_KEY)
+          const now = Date.now()
+          
+          if (!window.location.pathname.includes('/login') && 
+              (!lastRedirect || (now - parseInt(lastRedirect)) > 5000)) {
+            sessionStorage.setItem(REDIRECT_KEY, now.toString())
+            window.location.href = '/login?error=session_invalid'
+          }
+        }
+        return { error: 'Session expired. Please login again.' }
+      }
+      
+      // For non-auth errors, return error without redirecting
+      return {
+        error: errorMessage || `Upload failed: ${response.statusText}`,
+        data: uploadData
+      }
     }
 
     const data = await response.json()
