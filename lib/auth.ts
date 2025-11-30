@@ -42,8 +42,19 @@ class SecureStorage {
     try {
       const encoded = this.encode(value)
       localStorage.setItem(key, encoded)
-    } catch (error) {
+      // Verify it was stored
+      const retrieved = localStorage.getItem(key)
+      if (!retrieved) {
+        console.error('⚠️ Failed to store item in localStorage:', key)
+      }
+    } catch (error: any) {
       console.error('Storage error:', error)
+      // Check if localStorage is full or disabled
+      if (error.name === 'QuotaExceededError') {
+        console.error('❌ localStorage is full. Please clear some space.')
+      } else if (error.name === 'SecurityError') {
+        console.error('❌ localStorage access denied (check browser privacy settings)')
+      }
     }
   }
 
@@ -230,8 +241,22 @@ export const isAuthenticated = (): boolean => {
   const token = tokenManager.getToken()
   const session = sessionManager.getSession()
   
-  if (!token || !session) return false
-  if (tokenManager.isTokenExpired()) return false
+  // More lenient check - only need token OR session (session is optional)
+  if (!token) {
+    console.debug('🔍 isAuthenticated: No token found')
+    return false
+  }
+  
+  // Check if token is expired
+  if (tokenManager.isTokenExpired()) {
+    console.debug('🔍 isAuthenticated: Token expired')
+    return false
+  }
+  
+  // Session is optional - if we have a valid token, we're authenticated
+  if (!session) {
+    console.debug('⚠️ isAuthenticated: Token valid but no session (this is okay)')
+  }
   
   return true
 }

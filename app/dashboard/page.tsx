@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '../../components/Logo'
-import { isAuthenticated, clearAuth, sessionManager } from '@/lib/auth'
+import { isAuthenticated, clearAuth, sessionManager, tokenManager } from '@/lib/auth'
 import { get } from '@/lib/api'
 
 interface Agent {
@@ -22,19 +22,81 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    // Check authentication
-    if (!isAuthenticated()) {
-      router.push('/login?error=session_expired')
-      return
+    // Check if we just logged in (need to wait longer for token to be available)
+    const justLoggedIn = typeof window !== 'undefined' && sessionStorage.getItem('just_logged_in') === 'true'
+    if (justLoggedIn) {
+      sessionStorage.removeItem('just_logged_in') // Clear flag
+      console.log('🔐 Just logged in, waiting longer for token to be available...')
+    }
+    
+    // Check authentication - give it more attempts if we just logged in
+    let attempts = 0
+    const maxAttempts = justLoggedIn ? 10 : 5  // More attempts if just logged in
+    let redirectAttempted = false
+    const initialDelay = justLoggedIn ? 500 : 100  // Longer delay if just logged in
+    
+    const checkAuth = () => {
+      attempts++
+      const isAuth = isAuthenticated()
+      
+      console.log(`🔍 Auth check attempt ${attempts}/${maxAttempts}:`, isAuth ? '✅ Authenticated' : '❌ Not authenticated')
+      
+      if (isAuth) {
+        console.log('✅ Authentication verified, loading dashboard...')
+        // Fetch data in parallel
+        Promise.all([
+          fetchUser().catch(err => console.error('Error in fetchUser:', err)),
+          fetchAgents().catch(err => console.error('Error in fetchAgents:', err))
+        ]).finally(() => {
+          // Ensure loading stops even if both fail
+          setLoading(false)
+        })
+      } else if (attempts >= maxAttempts) {
+        // Only redirect once if we've checked multiple times and still no auth
+        if (!redirectAttempted) {
+          redirectAttempted = true
+          console.warn('❌ Authentication failed after multiple attempts, redirecting to login')
+          
+          // Double-check token before redirecting
+          const token = tokenManager.getToken()
+          const session = sessionManager.getSession()
+          console.log('🔍 Final check - Token:', token ? 'Present' : 'Missing', 'Session:', session ? 'Present' : 'Missing')
+          
+          if (!token && !session) {
+            // Use window.location for a hard redirect to prevent loops
+            window.location.href = '/login?error=session_expired'
+          } else {
+            // We have token/session but isAuthenticated failed - try one more time
+            console.warn('⚠️ Token/session exists but auth check failed, retrying...')
+            setTimeout(() => {
+              if (isAuthenticated()) {
+                fetchUser()
+                fetchAgents()
+                setLoading(false)
+              } else {
+                window.location.href = '/login?error=session_expired'
+              }
+            }, 1000)
+          }
+        }
+      } else {
+        // Retry after a delay (longer delay if just logged in)
+        const delay = justLoggedIn && attempts < 5 ? 400 : 200
+        setTimeout(checkAuth, delay)
+      }
     }
 
-    fetchUser()
-    fetchAgents()
+    // Initial delay (longer if we just logged in)
+    const timer = setTimeout(() => {
+      checkAuth()
+    }, initialDelay)
+
+    return () => clearTimeout(timer)
   }, [router])
 
   const fetchUser = async () => {
     try {
-      // Try to get user from session first
+      // Try to get user from session first (faster UX)
       const sessionUser = sessionManager.getUser()
       if (sessionUser) {
         setUser({
@@ -44,29 +106,43 @@ export default function DashboardPage() {
           first_name: sessionUser.firstName,
           last_name: sessionUser.lastName
         })
+        // Don't wait for API - show user immediately from session
       }
 
-      // Fetch fresh user data from API
-      const response = await get('/users/me')
-      
-      if (response.error) {
-        if (response.error.includes('expired') || response.error.includes('invalid')) {
-          clearAuth()
-          router.push('/login?error=session_expired')
+      // Fetch fresh user data from API (don't block on this)
+      try {
+        const response = await get('/users/me')
+        
+        if (response.error) {
+          console.error('❌ Error fetching user:', response.error)
+          // Only redirect if it's an auth error, otherwise use session data
+          if (response.error.includes('expired') || response.error.includes('invalid') || response.error.includes('Authentication')) {
+            clearAuth()
+            // Use window.location to prevent redirect loops
+            window.location.href = '/login?error=session_expired'
+            return
+          }
+          // For other errors, just log and continue (use session data)
+          console.warn('⚠️ Using session data due to API error')
           return
         }
-        throw new Error(response.error)
-      }
 
-      if (response.data?.user) {
-        setUser(response.data.user)
-        // Update session
-        sessionManager.createSession(response.data.user)
+        if (response.data?.user) {
+          setUser(response.data.user)
+          // Update session
+          sessionManager.createSession(response.data.user)
+        }
+      } catch (apiError: any) {
+        console.error('❌ API error fetching user:', apiError)
+        // Continue with session data
       }
-    } catch (error) {
-      console.error('Error fetching user:', error)
-      clearAuth()
-      router.push('/login?error=session_error')
+    } catch (error: any) {
+      console.error('❌ Error in fetchUser:', error)
+      // Use session data if available
+      const sessionUser = sessionManager.getUser()
+      if (!sessionUser) {
+        console.warn('⚠️ No session data available')
+      }
     }
   }
 
@@ -75,23 +151,38 @@ export default function DashboardPage() {
       const response = await get('/agents')
       
       if (response.error) {
-        if (response.error.includes('expired') || response.error.includes('invalid')) {
-          clearAuth()
-          router.push('/login?error=session_expired')
-          return
+        console.error('❌ Error fetching agents:', response.error)
+        // Don't redirect on agent fetch errors - just show empty list
+        if (response.error.includes('expired') || response.error.includes('invalid') || response.error.includes('Authentication')) {
+          // This is an auth error, but we already checked auth, so just log it
+          console.warn('⚠️ Auth error fetching agents, but user is authenticated')
         }
-        throw new Error(response.error)
-      }
-
-      if (response.data?.agents) {
+        setAgents([])
+      } else if (response.data?.agents) {
         setAgents(response.data.agents)
+      } else {
+        setAgents([])
       }
     } catch (error) {
-      console.error('Error fetching agents:', error)
+      console.error('❌ Error fetching agents:', error)
+      setAgents([])
     } finally {
+      // Always stop loading
       setLoading(false)
     }
   }
+
+  // Safety timeout - ensure loading state doesn't last forever
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ Loading timeout reached, stopping loading state')
+        setLoading(false)
+      }
+    }, 10000) // 10 second timeout
+
+    return () => clearTimeout(timeout)
+  }, [loading])
 
   const handleLogout = () => {
     clearAuth()
@@ -101,10 +192,31 @@ export default function DashboardPage() {
   // Check if user is admin and show admin link
   const isAdmin = user?.role === 'admin'
 
+  // Show loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+        <div className="text-center">
+          <div className="text-white text-xl mb-4">Loading dashboard...</div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // Safety check - if we somehow don't have a user after loading, show a message
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-white text-xl mb-4">Unable to load user data</div>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+          >
+            Go to Login
+          </button>
+        </div>
       </div>
     )
   }

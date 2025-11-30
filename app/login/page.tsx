@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { sanitizeInput, isValidEmail } from '@/lib/security'
 import { post } from '@/lib/api'
-import { tokenManager, sessionManager, clearAuth } from '@/lib/auth'
+import { tokenManager, sessionManager, clearAuth, isAuthenticated } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,21 +17,24 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Clear any old/invalid tokens and show error message
+  // Clear any old/invalid tokens and show error message (only once on mount)
   useEffect(() => {
-    clearAuth() // Clear any existing auth data
+    // Only clear auth if we're coming from a redirect (has error param)
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      clearAuth() // Clear any existing auth data only if there's an error
+      if (errorParam === 'session_invalid') {
+        setError('Your session has expired or is invalid. Please login again.')
+      } else if (errorParam === 'session_expired') {
+        setError('Your session has expired. Please login again.')
+      }
+    }
+    
     // Clear redirect flag when on login page
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('auth_redirect_attempted')
     }
-    
-    const errorParam = searchParams.get('error')
-    if (errorParam === 'session_invalid') {
-      setError('Your session has expired or is invalid. Please login again.')
-    } else if (errorParam === 'session_expired') {
-      setError('Your session has expired. Please login again.')
-    }
-  }, [searchParams])
+  }, []) // Only run once on mount, not on every searchParams change
 
   const handleGoogleLogin = async () => {
     try {
@@ -94,21 +97,73 @@ export default function LoginPage() {
       }
 
       if (response.data?.token) {
+        console.log('📝 Login successful, storing authentication...')
+        
         // Store token securely
         tokenManager.setToken(response.data.token, 7 * 24 * 60 * 60) // 7 days
+        
+        // Verify token was stored
+        const storedToken = tokenManager.getToken()
+        if (!storedToken) {
+          console.error('❌ Failed to store token')
+          setError('Failed to save authentication. Please try again.')
+          setLoading(false)
+          return
+        }
+        console.log('✅ Token stored')
         
         // Create session
         if (response.data.user) {
           sessionManager.createSession(response.data.user)
+          // Verify session was created
+          const session = sessionManager.getSession()
+          if (!session) {
+            console.error('❌ Failed to create session')
+            setError('Failed to create session. Please try again.')
+            setLoading(false)
+            return
+          }
+          console.log('✅ Session created for user:', session.email)
+        } else {
+          console.warn('⚠️ No user data in response')
         }
 
+        // Verify token is stored (session is optional)
+        const tokenCheck = tokenManager.getToken()
+        if (!tokenCheck) {
+          console.error('❌ Token not found after storing')
+          setError('Failed to save authentication token. Please try again.')
+          setLoading(false)
+          return
+        }
+        
+        console.log('✅ Token verified, ready to redirect')
+
+        console.log('✅ Authentication verified, redirecting to dashboard...')
+        
+        // Store a flag that we just logged in (to help dashboard know to wait)
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('just_logged_in', 'true')
+        }
+        
+        // Use router for smoother transition (preserves React state)
         router.push('/dashboard')
+        
+        // Fallback: if router doesn't work, use window.location after delay
+        setTimeout(() => {
+          if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+            console.warn('⚠️ Router push failed, using window.location fallback')
+            window.location.href = '/dashboard'
+          }
+        }, 1000)
       } else {
+        console.error('❌ No token in response:', response.data)
         setError('Invalid response from server')
+        setLoading(false)
       }
     } catch (err: any) {
+      console.error('Login error:', err)
       setError(err.message || 'Network error. Please try again.')
-    } finally {
       setLoading(false)
     }
   }
