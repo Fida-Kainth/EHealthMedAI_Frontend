@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { isAuthenticated } from '@/lib/auth'
 
 interface Term {
   id: number
@@ -23,8 +24,7 @@ export default function GlossaryPage() {
   const [selectedTerm, setSelectedTerm] = useState<Term | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

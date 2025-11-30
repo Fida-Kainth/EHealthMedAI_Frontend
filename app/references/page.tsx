@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { isAuthenticated } from '@/lib/auth'
 
 interface Reference {
   id: number
@@ -27,8 +28,7 @@ export default function ReferencesPage() {
   const [selectedReference, setSelectedReference] = useState<Reference | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

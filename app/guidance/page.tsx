@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { get } from '@/lib/api'
+import { isAuthenticated } from '@/lib/auth'
 
 interface StakeholderType {
   id: number
@@ -34,8 +35,7 @@ export default function GuidancePage() {
   const [guidanceLoading, setGuidanceLoading] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

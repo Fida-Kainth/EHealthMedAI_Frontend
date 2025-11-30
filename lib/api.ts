@@ -5,7 +5,11 @@
 
 import { tokenManager, sessionManager, clearAuth, getAuthHeader } from './auth'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+    ? 'https://ehealthmedai-backend.onrender.com/api'
+    : 'http://localhost:5000/api'
+)
 
 interface RequestOptions extends RequestInit {
   requireAuth?: boolean
@@ -61,15 +65,8 @@ export async function apiRequest<T = any>(
   if (requireAuth && !skipAuth) {
     const token = tokenManager.getToken()
     if (!token || tokenManager.isTokenExpired()) {
-      // Try to refresh token
-      const refreshed = await refreshToken()
-      if (!refreshed) {
-        clearAuth()
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login?error=session_expired'
-        }
-        return { error: 'Authentication required' }
-      }
+      // Return error instead of redirecting - let pages handle it
+      return { error: 'Authentication required' }
     }
   }
 
@@ -115,17 +112,8 @@ export async function apiRequest<T = any>(
 
     // Handle token expiration
     if (response.status === 401) {
-      const refreshed = await refreshToken()
-      if (refreshed) {
-        // Retry request with new token
-        return apiRequest<T>(endpoint, options)
-      } else {
-        clearAuth()
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login?error=session_expired'
-        }
-        return { error: 'Session expired' }
-      }
+      clearAuth()
+      return { error: 'Session expired. Please login again.' }
     }
 
     // Parse response
@@ -273,16 +261,8 @@ export async function uploadFile<T = any>(
     })
 
     if (response.status === 401) {
-      const refreshed = await refreshToken()
-      if (refreshed) {
-        return uploadFile<T>(endpoint, file, additionalData)
-      } else {
-        clearAuth()
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login?error=session_expired'
-        }
-        return { error: 'Session expired' }
-      }
+      clearAuth()
+      return { error: 'Session expired. Please login again.' }
     }
 
     const data = await response.json()

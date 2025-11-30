@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { post, get } from '@/lib/api'
 import { sanitizeInput } from '@/lib/security'
+import { isAuthenticated } from '@/lib/auth'
 
 interface HL7Connector {
   id: number
@@ -32,8 +33,7 @@ export default function HL7Page() {
   })
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { post, get } from '@/lib/api'
+import { isAuthenticated } from '@/lib/auth'
 
 interface Agent {
   id: number
@@ -94,8 +95,7 @@ export default function VoiceAIPage() {
   const [loadingVoices, setLoadingVoices] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

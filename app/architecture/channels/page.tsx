@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { post, get, del } from '@/lib/api'
+import { isAuthenticated } from '@/lib/auth'
 
 interface Channel {
   id: number
@@ -33,8 +34,7 @@ export default function ChannelsPage() {
   })
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

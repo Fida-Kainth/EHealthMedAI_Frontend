@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { post, get } from '@/lib/api'
 import { sanitizeInput } from '@/lib/security'
+import { isAuthenticated } from '@/lib/auth'
 
 interface SDK {
   id: number
@@ -32,8 +33,7 @@ export default function SDKsPage() {
   })
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

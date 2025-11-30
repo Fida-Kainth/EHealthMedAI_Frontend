@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { isAuthenticated } from '@/lib/auth'
 
 interface ChangeControl {
   id: number
@@ -41,8 +42,7 @@ export default function ChangeControlPage() {
   })
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }

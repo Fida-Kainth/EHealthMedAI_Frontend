@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { post, get } from '@/lib/api'
 import { sanitizeInput } from '@/lib/security'
+import { isAuthenticated } from '@/lib/auth'
 
 interface ReportTemplate {
   id: number
@@ -51,8 +52,7 @@ export default function ReportsPage() {
   const [recipientEmail, setRecipientEmail] = useState('')
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!isAuthenticated()) {
       router.push('/login')
       return
     }
@@ -315,8 +315,7 @@ export default function ReportsPage() {
                       <button
                         onClick={async () => {
                           try {
-                            const token = localStorage.getItem('token')
-                            if (!token) {
+                            if (!isAuthenticated()) {
                               alert('Please log in to download reports')
                               router.push('/login')
                               return
