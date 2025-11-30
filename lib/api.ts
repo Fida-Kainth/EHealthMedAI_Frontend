@@ -77,17 +77,17 @@ export async function apiRequest<T = any>(
     'X-CSRF-Token': getCSRFToken(),
   }
 
-  // Add custom headers
-  if (headers) {
-    Object.assign(baseHeaders, headers)
-  }
-
-  // Add authorization header
+  // Add authorization header to base headers object first
   if (requireAuth && !skipAuth) {
     const authHeader = getAuthHeader()
     if (authHeader) {
       baseHeaders['Authorization'] = authHeader
     }
+  }
+
+  // Add custom headers
+  if (headers) {
+    Object.assign(baseHeaders, headers)
   }
 
   const requestHeaders = new Headers(baseHeaders)
@@ -243,7 +243,7 @@ export async function uploadFile<T = any>(
   }
 
   const authHeader = getAuthHeader()
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'X-CSRF-Token': getCSRFToken(),
     'X-Requested-With': 'XMLHttpRequest'
   }
@@ -282,4 +282,3 @@ export async function uploadFile<T = any>(
     }
   }
 }
-
