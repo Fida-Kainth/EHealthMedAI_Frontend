@@ -1,4 +1,4 @@
-/**
+  /**
  * Secure API Client
  * Handles all API requests with security best practices
  */
@@ -78,9 +78,7 @@ export async function apiRequest<T = any>(
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'X-CSRF-Token': getCSRFToken(),
-    'Cache-Control': 'no-cache, no-store, must-revalidate', // Disable caching
-    'Pragma': 'no-cache', // For HTTP/1.0 compatibility
-    'Expires': '0' // Ensure no expiry in cache
+    'Cache-Control': 'no-cache', // Disable caching to avoid 304
   }
 
   // Add authorization header to base headers object first
@@ -129,9 +127,9 @@ export async function apiRequest<T = any>(
       data = await response.text()
     }
 
-    // Handle 304 Not Modified
+    // Handling 304 (Not Modified)
     if (response.status === 304) {
-      return { data }; // Use the cached data
+      return { data }; // Use the cached data (no need to re-fetch)
     }
 
     // Only redirect on actual authentication errors (401/403 with auth-related messages)
