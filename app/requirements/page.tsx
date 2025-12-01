@@ -24,6 +24,7 @@ export default function RequirementsPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([])
   const [filteredRequirements, setFilteredRequirements] = useState<Requirement[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     category: 'all',
     requirement_type: 'all',
@@ -34,6 +35,7 @@ export default function RequirementsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [createSuccess, setCreateSuccess] = useState(false)
   const [createdRequirementId, setCreatedRequirementId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     requirement_id: '',
@@ -61,6 +63,7 @@ export default function RequirementsPage() {
   const fetchRequirements = async (overrideFilters?: typeof filters) => {
     try {
       setLoading(true)
+      setError(null)
       const activeFilters = overrideFilters || filters
       const params = new URLSearchParams()
       if (activeFilters.category !== 'all') params.append('category', activeFilters.category)
@@ -68,20 +71,22 @@ export default function RequirementsPage() {
       if (activeFilters.status !== 'all') params.append('status', activeFilters.status)
       if (activeFilters.search) params.append('search', activeFilters.search)
 
-      const response = await get(`/requirements?${params}`)
+      const response = await get(`/requirements?${params.toString()}`)
       
       if (response.error) {
         console.error('Error fetching requirements:', response.error)
+        setError(response.error)
         setRequirements([])
         setFilteredRequirements([])
         return
       }
       
-      const requirements = response.data?.requirements || []
-      setRequirements(requirements)
+      const requirementsData = response.data?.requirements || []
+      setRequirements(requirementsData)
       // Note: filteredRequirements will be updated by the filterRequirements useEffect
     } catch (error: any) {
       console.error('Error fetching requirements:', error)
+      setError(error.message || 'Failed to load requirements')
       setRequirements([])
       setFilteredRequirements([])
     } finally {
@@ -148,6 +153,7 @@ export default function RequirementsPage() {
     e.preventDefault()
     setCreating(true)
     setCreateError(null)
+    setCreateSuccess(false)
 
     try {
       // Validate required fields
@@ -187,6 +193,7 @@ export default function RequirementsPage() {
         return
       }
       
+      setCreateSuccess(true)
       setShowCreateModal(false)
       setFormData({ 
         requirement_id: '', 
@@ -206,6 +213,9 @@ export default function RequirementsPage() {
         // Clear the highlight after 5 seconds
         setTimeout(() => setCreatedRequirementId(null), 5000)
       }
+      
+      // Reset success message after delay
+      setTimeout(() => setCreateSuccess(false), 3000)
       
       // Fetch all requirements (without filters) to ensure the new one appears
       await fetchRequirements({
@@ -264,6 +274,14 @@ export default function RequirementsPage() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-xl p-4 mb-6 border border-red-500/50">
+            <div className="text-red-200 font-semibold mb-1">Error Loading Requirements</div>
+            <div className="text-red-300 text-sm">{error}</div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border border-white/20">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -326,9 +344,29 @@ export default function RequirementsPage() {
 
         {/* Requirements List - Organized by Sections */}
         <div className="space-y-8">
-          {Object.keys(groupedRequirements).length === 0 ? (
+          {!loading && Object.keys(groupedRequirements).length === 0 && requirements.length === 0 ? (
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20">
-              <p className="text-white text-lg">No requirements found</p>
+              <svg className="w-16 h-16 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-white text-lg mb-2">No requirements found</p>
+              <p className="text-slate-300 text-sm mb-6">Start creating RFC 2119 requirements for your project</p>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                Create First Requirement
+              </button>
+            </div>
+          ) : !loading && Object.keys(groupedRequirements).length === 0 && requirements.length > 0 ? (
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20">
+              <p className="text-white text-lg mb-4">No requirements match your filters</p>
+              <button
+                onClick={() => setFilters({ category: 'all', requirement_type: 'all', status: 'all', search: '' })}
+                className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                Clear Filters
+              </button>
             </div>
           ) : (
             Object.entries(groupedRequirements).map(([category, subcategories]) => (
@@ -371,8 +409,8 @@ export default function RequirementsPage() {
                                 <span className={`px-3 py-1 rounded text-xs font-semibold border-2 ${typeColors[req.requirement_type]}`}>
                                   {req.requirement_type}
                                 </span>
-                                <span className={`px-3 py-1 rounded text-xs font-semibold ${statusColors[req.status]}`}>
-                                  {req.status}
+                                <span className={`px-3 py-1 rounded text-xs font-semibold text-white capitalize ${statusColors[req.status] || 'bg-gray-500/50'}`}>
+                                  {req.status?.replace('_', ' ') || 'draft'}
                                 </span>
                               </div>
                               <h3 className="text-white font-bold text-lg mb-1">{req.title}</h3>
@@ -455,9 +493,16 @@ export default function RequirementsPage() {
           }}>
             <div className="bg-slate-900 rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-2xl font-bold text-white mb-6">Create Requirement</h2>
+              
               {createError && (
                 <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
                   {createError}
+                </div>
+              )}
+              
+              {createSuccess && (
+                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-300 text-sm">
+                  Requirement created successfully!
                 </div>
               )}
               <form onSubmit={handleCreate} className="space-y-4">
@@ -570,6 +615,7 @@ export default function RequirementsPage() {
                     onClick={() => {
                       setShowCreateModal(false)
                       setCreateError(null)
+                      setCreateSuccess(false)
                     }}
                     disabled={creating}
                     className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-500/50 disabled:cursor-not-allowed text-white py-2 rounded-lg"

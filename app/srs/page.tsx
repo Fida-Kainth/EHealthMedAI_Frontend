@@ -34,9 +34,13 @@ export default function SRSPage() {
   const [documents, setDocuments] = useState<SRSDocument[]>([])
   const [filteredDocuments, setFilteredDocuments] = useState<SRSDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedSection, setSelectedSection] = useState<string>('all')
   const [selectedDoc, setSelectedDoc] = useState<SRSDocument | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createSuccess, setCreateSuccess] = useState(false)
   const [formData, setFormData] = useState({
     document_id: '',
     title: '',
@@ -60,14 +64,30 @@ export default function SRSPage() {
 
   const fetchDocuments = async () => {
     try {
+      setLoading(true)
+      setError(null)
       const response = await get('/srs/documents')
-      if (response.ok) {
-        const data = await response.json()
-        setDocuments(data.documents)
-        setFilteredDocuments(data.documents)
+      
+      if (response.error) {
+        console.error('Error fetching documents:', response.error)
+        setError(response.error)
+        setDocuments([])
+        setFilteredDocuments([])
+        return
       }
-    } catch (error) {
+
+      if (response.data?.documents) {
+        setDocuments(response.data.documents)
+        setFilteredDocuments(response.data.documents)
+      } else {
+        setDocuments([])
+        setFilteredDocuments([])
+      }
+    } catch (error: any) {
       console.error('Error fetching documents:', error)
+      setError(error.message || 'Failed to load SRS documents')
+      setDocuments([])
+      setFilteredDocuments([])
     } finally {
       setLoading(false)
     }
@@ -83,19 +103,42 @@ export default function SRSPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    setCreateError('')
+    setCreateSuccess(false)
+    setCreateLoading(true)
+    
     try {
       const response = await post('/srs/documents', formData)
+      
       if (response.error) {
+        setCreateError(response.error || 'Failed to create document')
         console.error('Error creating document:', response.error)
         return
       }
-      if (response.data) {
+      
+      if (response.data?.document) {
+        setCreateSuccess(true)
         setShowCreateModal(false)
-        setFormData({ document_id: '', title: '', section: 'overview', subsection: '', content: '', version: '1.0' })
-        fetchDocuments()
+        setFormData({ 
+          document_id: '', 
+          title: '', 
+          section: 'overview', 
+          subsection: '', 
+          content: '', 
+          version: '1.0' 
+        })
+        // Refresh the list
+        await fetchDocuments()
+        // Reset success message after a delay
+        setTimeout(() => setCreateSuccess(false), 3000)
+      } else {
+        setCreateError('Invalid response from server')
       }
-    } catch (error) {
+    } catch (error: any) {
+      setCreateError(error.message || 'Error creating document')
       console.error('Error creating document:', error)
+    } finally {
+      setCreateLoading(false)
     }
   }
 
@@ -138,6 +181,14 @@ export default function SRSPage() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-xl p-4 mb-6 border border-red-500/50">
+            <div className="text-red-200 font-semibold mb-1">Error Loading SRS Documents</div>
+            <div className="text-red-300 text-sm">{error}</div>
+          </div>
+        )}
+
         {/* Section Filter */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border border-white/20">
           <label className="block text-white font-semibold mb-3">Filter by Section</label>
@@ -169,22 +220,46 @@ export default function SRSPage() {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <span className="text-teal-300 font-mono text-sm">{doc.document_id}</span>
-                  <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${statusColors[doc.status]}`}>
-                    {doc.status}
-                  </span>
+                    <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold text-white capitalize ${statusColors[doc.status] || 'bg-gray-500/50'}`}>
+                      {doc.status?.replace('_', ' ') || 'draft'}
+                    </span>
                 </div>
                 <span className="text-slate-300 text-xs">v{doc.version}</span>
               </div>
               <h3 className="text-white font-bold text-lg mb-2">{doc.title}</h3>
               <p className="text-slate-300 text-sm mb-2 capitalize">{doc.section}</p>
-              <p className="text-slate-200 text-sm line-clamp-3">{doc.content.substring(0, 150)}...</p>
+              <p className="text-slate-200 text-sm line-clamp-3">
+                {doc.content && doc.content.length > 150 ? doc.content.substring(0, 150) + '...' : doc.content || 'No content'}
+              </p>
             </div>
           ))}
         </div>
 
-        {filteredDocuments.length === 0 && (
+        {!loading && filteredDocuments.length === 0 && documents.length === 0 && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20">
-            <p className="text-white text-lg">No documents found in this section</p>
+            <svg className="w-16 h-16 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-white text-lg mb-2">No SRS documents found</p>
+            <p className="text-slate-300 text-sm mb-6">Start creating your Software Requirements Specification documents</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              Create First Document
+            </button>
+          </div>
+        )}
+
+        {!loading && filteredDocuments.length === 0 && documents.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20">
+            <p className="text-white text-lg mb-4">No documents found in this section</p>
+            <button
+              onClick={() => setSelectedSection('all')}
+              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              Show All Documents
+            </button>
           </div>
         )}
 
@@ -197,8 +272,8 @@ export default function SRSPage() {
                   <h2 className="text-3xl font-bold text-white mb-2">{selectedDoc.title}</h2>
                   <div className="flex items-center gap-3">
                     <span className="text-teal-300 font-mono">{selectedDoc.document_id}</span>
-                    <span className={`px-3 py-1 rounded text-sm font-semibold ${statusColors[selectedDoc.status]}`}>
-                      {selectedDoc.status}
+                    <span className={`px-3 py-1 rounded text-sm font-semibold text-white capitalize ${statusColors[selectedDoc.status] || 'bg-gray-500/50'}`}>
+                      {selectedDoc.status?.replace('_', ' ') || 'draft'}
                     </span>
                     <span className="text-slate-300">v{selectedDoc.version}</span>
                   </div>
@@ -230,6 +305,19 @@ export default function SRSPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowCreateModal(false)}>
             <div className="bg-slate-900 rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-2xl font-bold text-white mb-6">Create SRS Document</h2>
+              
+              {createError && (
+                <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg mb-4">
+                  {createError}
+                </div>
+              )}
+              
+              {createSuccess && (
+                <div className="bg-green-500/20 border border-green-500/50 text-green-200 px-4 py-3 rounded-lg mb-4">
+                  SRS document created successfully!
+                </div>
+              )}
+              
               <form onSubmit={handleCreate} className="space-y-4">
                 <div>
                   <label className="block text-white mb-2">Document ID</label>
@@ -295,10 +383,23 @@ export default function SRSPage() {
                   />
                 </div>
                 <div className="flex gap-4">
-                  <button type="submit" className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-2 rounded-lg">
-                    Create
+                  <button 
+                    type="submit" 
+                    disabled={createLoading}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg"
+                  >
+                    {createLoading ? 'Creating...' : 'Create'}
                   </button>
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowCreateModal(false)
+                      setCreateError('')
+                      setCreateSuccess(false)
+                    }} 
+                    disabled={createLoading}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white py-2 rounded-lg"
+                  >
                     Cancel
                   </button>
                 </div>

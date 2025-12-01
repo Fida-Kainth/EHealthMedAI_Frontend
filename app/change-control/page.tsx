@@ -26,11 +26,15 @@ export default function ChangeControlPage() {
   const [changes, setChanges] = useState<ChangeControl[]>([])
   const [filteredChanges, setFilteredChanges] = useState<ChangeControl[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     status: 'all',
     change_type: 'all'
   })
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createSuccess, setCreateSuccess] = useState(false)
   const [formData, setFormData] = useState({
     change_id: '',
     change_type: 'requirement_change',
@@ -56,14 +60,30 @@ export default function ChangeControlPage() {
 
   const fetchChanges = async () => {
     try {
+      setLoading(true)
+      setError(null)
       const response = await get('/change-control')
-      if (response.ok) {
-        const data = await response.json()
-        setChanges(data.changes)
-        setFilteredChanges(data.changes)
+      
+      if (response.error) {
+        console.error('Error fetching changes:', response.error)
+        setError(response.error)
+        setChanges([])
+        setFilteredChanges([])
+        return
       }
-    } catch (error) {
+
+      if (response.data?.changes) {
+        setChanges(response.data.changes)
+        setFilteredChanges(response.data.changes)
+      } else {
+        setChanges([])
+        setFilteredChanges([])
+      }
+    } catch (error: any) {
       console.error('Error fetching changes:', error)
+      setError(error.message || 'Failed to load change control log')
+      setChanges([])
+      setFilteredChanges([])
     } finally {
       setLoading(false)
     }
@@ -85,19 +105,44 @@ export default function ChangeControlPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    setCreateError('')
+    setCreateSuccess(false)
+    setCreateLoading(true)
+    
     try {
       const response = await post('/change-control', formData)
+      
       if (response.error) {
+        setCreateError(response.error || 'Failed to create change request')
         console.error('Error creating change request:', response.error)
         return
       }
-      if (response.data) {
+      
+      if (response.data?.change) {
+        setCreateSuccess(true)
         setShowCreateModal(false)
-        setFormData({ change_id: '', change_type: 'requirement_change', title: '', description: '', reason: '', impact_assessment: '', affected_documents: [], affected_requirements: [] })
-        fetchChanges()
+        setFormData({ 
+          change_id: '', 
+          change_type: 'requirement_change', 
+          title: '', 
+          description: '', 
+          reason: '', 
+          impact_assessment: '', 
+          affected_documents: [], 
+          affected_requirements: [] 
+        })
+        // Refresh the list
+        await fetchChanges()
+        // Reset success message after a delay
+        setTimeout(() => setCreateSuccess(false), 3000)
+      } else {
+        setCreateError('Invalid response from server')
       }
-    } catch (error) {
+    } catch (error: any) {
+      setCreateError(error.message || 'Error creating change request')
       console.error('Error creating change request:', error)
+    } finally {
+      setCreateLoading(false)
     }
   }
 
@@ -140,6 +185,14 @@ export default function ChangeControlPage() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-xl p-4 mb-6 border border-red-500/50">
+            <div className="text-red-200 font-semibold mb-1">Error Loading Change Control Log</div>
+            <div className="text-red-300 text-sm">{error}</div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border border-white/20">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -187,11 +240,11 @@ export default function ChangeControlPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-teal-300 font-mono text-sm">{change.change_id}</span>
-                    <span className={`px-3 py-1 rounded text-xs font-semibold ${statusColors[change.status]}`}>
-                      {change.status}
+                    <span className={`px-3 py-1 rounded text-xs font-semibold text-white capitalize ${statusColors[change.status] || 'bg-gray-500/50'}`}>
+                      {change.status?.replace('_', ' ') || 'proposed'}
                     </span>
-                    <span className="px-3 py-1 rounded text-xs font-semibold bg-purple-500/50 text-white">
-                      {change.change_type.replace('_', ' ')}
+                    <span className="px-3 py-1 rounded text-xs font-semibold bg-purple-500/50 text-white capitalize">
+                      {change.change_type?.replace('_', ' ') || 'N/A'}
                     </span>
                   </div>
                   <h3 className="text-white font-bold text-xl mb-2">{change.title}</h3>
@@ -220,21 +273,49 @@ export default function ChangeControlPage() {
                 )}
                 <div>
                   <div className="text-slate-300">Created</div>
-                  <div className="text-white">{new Date(change.created_at).toLocaleDateString()}</div>
+                  <div className="text-white">{change.created_at ? new Date(change.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</div>
                 </div>
+                {change.reviewed_by_email && (
+                  <div>
+                    <div className="text-slate-300">Reviewed By</div>
+                    <div className="text-white">{change.reviewed_by_email}</div>
+                  </div>
+                )}
+                {change.approved_by_email && (
+                  <div>
+                    <div className="text-slate-300">Approved By</div>
+                    <div className="text-white">{change.approved_by_email}</div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
 
-        {filteredChanges.length === 0 && (
+        {!loading && filteredChanges.length === 0 && changes.length === 0 && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20">
-            <p className="text-white text-lg mb-4">No change requests found</p>
+            <svg className="w-16 h-16 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <p className="text-white text-lg mb-2">No change requests found</p>
+            <p className="text-slate-300 text-sm mb-6">Start tracking changes to your requirements and specifications</p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg"
+              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
             >
               Create First Change Request
+            </button>
+          </div>
+        )}
+
+        {!loading && filteredChanges.length === 0 && changes.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 text-center border border-white/20">
+            <p className="text-white text-lg mb-4">No change requests match your filters</p>
+            <button
+              onClick={() => setFilters({ status: 'all', change_type: 'all' })}
+              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              Clear Filters
             </button>
           </div>
         )}
@@ -243,6 +324,19 @@ export default function ChangeControlPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowCreateModal(false)}>
             <div className="bg-slate-900 rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-2xl font-bold text-white mb-6">Create Change Request</h2>
+              
+              {createError && (
+                <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg mb-4">
+                  {createError}
+                </div>
+              )}
+              
+              {createSuccess && (
+                <div className="bg-green-500/20 border border-green-500/50 text-green-200 px-4 py-3 rounded-lg mb-4">
+                  Change request created successfully!
+                </div>
+              )}
+              
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -312,10 +406,23 @@ export default function ChangeControlPage() {
                   />
                 </div>
                 <div className="flex gap-4">
-                  <button type="submit" className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-2 rounded-lg">
-                    Create
+                  <button 
+                    type="submit" 
+                    disabled={createLoading}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg"
+                  >
+                    {createLoading ? 'Creating...' : 'Create'}
                   </button>
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowCreateModal(false)
+                      setCreateError('')
+                      setCreateSuccess(false)
+                    }} 
+                    disabled={createLoading}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white py-2 rounded-lg"
+                  >
                     Cancel
                   </button>
                 </div>
